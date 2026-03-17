@@ -1,137 +1,87 @@
-
-
-// MARK: - Prompt Handler (Reynard Enhanced Edition)
-
-enum PromptEvents: String, CaseIterable {
-    case prompt = "GeckoView:Prompt"
-}
-
-private func findTopViewController() -> UIViewController? {
-    guard let window = UIApplication.shared.windows.first(where: { $0.isKeyWindow }),
-          let root = window.rootViewController else {
-        return nil
-    }
-    var top = root
-    while let presented = top.presentedViewController {
-        top = presented
-    }
-    return top
-}
-
-func newPromptHandler(_ session: GeckoSession) -> GeckoSessionHandler {
-    let handler = GeckoSessionHandler(
-        moduleName: "GeckoViewPrompter",
-        events: PromptEvents.allCases.map(\.rawValue),
-        session: session
-    ) { @MainActor session, delegate, type, message in
-        guard PromptEvents(rawValue: type) != nil else {
-            throw GeckoHandlerError("unknown message \(type)")
-        }
-
-        let promptType = message?["type"] as? String ?? ""
-        let title = message?["title"] as? String
-        let msg = message?["message"] as? String
-
-        switch promptType {
-        case "alert":
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                let alert = UIAlertController(
-                    title: title,
-                    message: msg,
-                    preferredStyle: .alert
-                )
-                alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-                    continuation.resume()
-                })
-                if let vc = findTopViewController() {
-                    vc.present(alert, animated: true)
-                } else {
-                    continuation.resume()
-                }
-            }
-            return ["prompt": [String: Any]()]
-
-        case "button":
-            let btnTitles = message?["btnTitle"] as? [String] ?? ["OK", "", "Cancel"]
-            let result: Int = await withCheckedContinuation { continuation in
-                let alert = UIAlertController(
-                    title: title,
-                    message: msg,
-                    preferredStyle: .alert
-                )
-
-                if btnTitles.count > 2 && !btnTitles[2].isEmpty {
-                    alert.addAction(UIAlertAction(title: btnTitles[2], style: .cancel) { _ in
-                        continuation.resume(returning: 2)
-                    })
-                }
-                if !btnTitles.isEmpty && !btnTitles[0].isEmpty {
-                    alert.addAction(UIAlertAction(title: btnTitles[0], style: .default) { _ in
-                        continuation.resume(returning: 0)
-                    })
-                }
-                if btnTitles.count > 1 && !btnTitles[1].isEmpty {
-                    alert.addAction(UIAlertAction(title: btnTitles[1], style: .default) { _ in
-                        continuation.resume(returning: 1)
-                    })
-                }
-
-                if alert.actions.isEmpty {
-                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-                        continuation.resume(returning: 0)
-                    })
-                }
-
-                if let vc = findTopViewController() {
-                    vc.present(alert, animated: true)
-                } else {
-                    continuation.resume(returning: 2)
-                }
-            }
-            return ["prompt": ["button": result]]
-
-        case "text":
-            let defaultValue = message?["value"] as? String ?? ""
-            let result: String? = await withCheckedContinuation { continuation in
-                let alert = UIAlertController(
-                    title: title,
-                    message: msg,
-                    preferredStyle: .alert
-                )
-                alert.addTextField { textField in
-                    textField.text = defaultValue
-                }
-                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
-                    continuation.resume(returning: nil as String?)
-                })
-                alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-                    let text = alert.textFields?.first?.text ?? ""
-                    continuation.resume(returning: text)
-                })
-                if let vc = findTopViewController() {
-                    vc.present(alert, animated: true)
-                } else {
-                    continuation.resume(returning: nil as String?)
-                }
-            }
-            if let text = result {
-                return ["prompt": ["text": text]]
-            }
-            return ["prompt": [String: Any]()]
-
-        case "popup":
-            return ["prompt": ["allow": true]]
-
-        case "beforeUnload":
-            return ["prompt": ["allow": true]]
-
-        case "repost":
-            return ["prompt": ["allow": true]]
-
-        default:
-            return ["prompt": [String: Any]()]
-        }
-    }
-    handler.setDelegate(true as AnyObject)
-    return handler
-}
+pref("javascript.options.ion", true);
+pref("javascript.options.baselinejit", true);
+pref("javascript.options.native_regexp", true);
+pref("javascript.options.asmjs", true);
+pref("javascript.options.wasm", true);
+pref("javascript.options.wasm_optimizingjit", true);
+pref("javascript.options.wasm_baselinejit", true);
+pref("javascript.options.wasm_simd", true);
+pref("javascript.options.wasm_relaxed_simd", true);
+pref("javascript.options.wasm_gc", true);
+pref("javascript.options.wasm_lazy_tiering", true);
+pref("javascript.options.wasm_function_references", true);
+pref("javascript.options.wasm_js_string_builtins", true);
+pref("javascript.options.wasm_tail_calls", true);
+pref("javascript.options.wasm_multi_memory", true);
+pref("javascript.options.wasm_memory64", true);
+pref("javascript.options.wasm_memory_control", true);
+pref("javascript.options.wasm_exnref", true);
+pref("javascript.options.spectre.index_masking", false);
+pref("javascript.options.spectre.jit_to_cxx_calls", false);
+pref("javascript.options.spectre.object_mitigations", false);
+pref("javascript.options.spectre.string_mitigations", false);
+pref("javascript.options.spectre.value_masking", false);
+pref("javascript.options.mem.gc_min_empty_chunk_count", 1);
+pref("javascript.options.mem.gc_max_empty_chunk_count", 8);
+pref("javascript.options.mem.nursery.min_kb", 256);
+pref("javascript.options.mem.nursery.max_kb", 8192);
+pref("javascript.options.mem.gc_compacting", true);
+pref("javascript.options.mem.gc_incremental", true);
+pref("javascript.options.mem.gc_per_zone", true);
+pref("javascript.options.mem.gc_incremental_slice_ms", 5);
+pref("gfx.webrender.all", true);
+pref("gfx.webrender.enabled", true);
+pref("gfx.webrender.compositor", true);
+pref("gfx.webrender.compositor.force-enabled", true);
+pref("gfx.canvas.accelerated", true);
+pref("gfx.canvas.accelerated.cache-items", 4096);
+pref("gfx.canvas.accelerated.cache-size", 512);
+pref("gfx.content.skia-font-cache-size", 10);
+pref("gfx.canvas.willreadfrequently.enabled", true);
+pref("layers.acceleration.force-enabled", true);
+pref("layers.gpu-process.enabled", true);
+pref("layers.gpu-process.force-enabled", true);
+pref("layers.offmainthreadcomposition.enabled", true);
+pref("layers.async-pan-zoom.enabled", true);
+pref("image.mem.decode_bytes_at_a_time", 32768);
+pref("image.mem.surfacecache.max_size_kb", 204800);
+pref("image.mem.surfacecache.min_expiration_ms", 120000);
+pref("image.mem.shared.unmap.min_expiration_ms", 120000);
+pref("image.cache.size", 10485760);
+pref("image.multithreaded_decoding.limit", 4);
+pref("network.http.max-persistent-connections-per-server", 8);
+pref("network.http.max-persistent-connections-per-proxy", 16);
+pref("network.http.max-connections", 256);
+pref("network.http.pacing.requests.enabled", false);
+pref("network.http.rcwn.enabled", true);
+pref("network.predictor.enabled", true);
+pref("network.predictor.enable-prefetch", true);
+pref("network.prefetch-next", true);
+pref("network.dns.disablePrefetch", false);
+pref("network.dns.disablePrefetchFromHTTPS", false);
+pref("network.buffer.cache.size", 131072);
+pref("network.buffer.cache.count", 48);
+pref("dom.max_script_run_time", 30);
+pref("dom.ipc.processCount", 4);
+pref("dom.ipc.processPrelaunch.enabled", true);
+pref("dom.webgpu.enabled", true);
+pref("dom.caches.enabled", true);
+pref("dom.serviceWorkers.enabled", true);
+pref("layout.css.font-loading-api.enabled", true);
+pref("layout.css.contain-intrinsic-size.enabled", true);
+pref("layout.css.content-visibility.enabled", true);
+pref("layout.css.grid-template-masonry-value.enabled", true);
+pref("layout.css.has-selector.enabled", true);
+pref("media.hardware-video-decoding.enabled", true);
+pref("media.hardware-video-decoding.force-enabled", true);
+pref("media.ffmpeg.vaapi.enabled", true);
+pref("media.media-source.enabled", true);
+pref("media.eme.enabled", true);
+pref("browser.cache.disk.enable", true);
+pref("browser.cache.memory.enable", true);
+pref("browser.cache.memory.capacity", 65536);
+pref("browser.cache.disk.smart_size.enabled", true);
+pref("nglayout.initialpaint.delay", 0);
+pref("nglayout.initialpaint.delay_in_oopif", 0);
+pref("content.notify.interval", 100000);
+pref("content.interrupt.parsing", true);
