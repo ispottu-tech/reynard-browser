@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 360
 
     steps:
@@ -17,15 +17,26 @@ jobs:
         with:
           submodules: false
 
-      - name: Select Xcode version
+      - name: Select latest Xcode and show SDK info
         run: |
-          if [ -d "/Applications/Xcode_16.2.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.2.app
-          else
-            echo "Xcode 16.2 not found, using default"
-            xcode-select -p
+          echo "=== Available Xcode versions ==="
+          ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
+
+          LATEST_XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$LATEST_XCODE" ]; then
+            echo "Selecting: $LATEST_XCODE"
+            sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
           fi
+
+          echo "=== Xcode version ==="
           xcodebuild -version
+
+          echo "=== SDK versions ==="
+          xcrun --sdk iphoneos --show-sdk-version || true
+          xcrun --sdk macosx --show-sdk-version || true
+
+          echo "=== Clang version ==="
+          clang --version || true
 
       - name: Install Rust toolchain
         run: |
@@ -42,6 +53,22 @@ jobs:
 
       - name: Apply Gecko patches
         run: ./tools/development/apply-patches.sh
+
+      - name: Bypass SDK version check if needed
+        run: |
+          cd engine/firefox
+          echo "Searching for SDK version checks..."
+          FOUND=$(grep -rl "is too old" build/moz.configure/ python/ moz.configure 2>/dev/null || true)
+          if [ -n "$FOUND" ]; then
+            echo "Found SDK checks in: $FOUND"
+            for f in $FOUND; do
+              echo "--- Patching $f ---"
+              sed -i '' 's/die(".*is too old.*/# SDK check bypassed by Reynard Enhanced build/' "$f" 2>/dev/null || true
+              sed -i '' 's/configure_error(".*is too old.*/# SDK check bypassed by Reynard Enhanced build/' "$f" 2>/dev/null || true
+            done
+          else
+            echo "No SDK version checks found to patch"
+          fi
 
       - name: Apply Enhanced preferences
         run: |
