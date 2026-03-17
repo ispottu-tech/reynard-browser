@@ -38,6 +38,13 @@ jobs:
           echo "=== Clang version ==="
           clang --version || true
 
+      - name: Install LLVM linker (lld)
+        run: |
+          brew install llvm
+          echo "/opt/homebrew/opt/llvm/bin" >> $GITHUB_PATH
+          ls /opt/homebrew/opt/llvm/bin/ld.lld || ls /opt/homebrew/opt/llvm/bin/lld || echo "lld paths:"
+          find /opt/homebrew/opt/llvm/bin -name "*lld*" 2>/dev/null || true
+
       - name: Install Rust toolchain
         run: |
           rustup target add aarch64-apple-ios
