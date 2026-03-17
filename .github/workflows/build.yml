@@ -64,13 +64,6 @@ jobs:
       - name: Apply Gecko patches
         run: ./tools/development/apply-patches.sh
 
-      - name: Add linker config to build script
-        run: |
-          sed -i '' '/--disable-tests/a\
-          echo "ac_add_options --enable-linker=lld"' tools/development/build-gecko.sh
-          echo "Added --enable-linker=lld to build-gecko.sh"
-          grep "linker" tools/development/build-gecko.sh
-
       - name: Bypass SDK version check if needed
         run: |
           cd engine/firefox
@@ -140,7 +133,25 @@ jobs:
         run: ./tools/development/build-idevice.sh
 
       - name: Build Gecko engine
-        run: ./tools/development/build-gecko.sh
+        run: |
+          FIREFOX_DIR="$(pwd)/engine/firefox"
+
+          rm -f "$FIREFOX_DIR/.mozconfig"
+          cat > "$FIREFOX_DIR/.mozconfig" << 'MOZEOF'
+          ac_add_options --enable-application=mobile/ios
+          ac_add_options --target=aarch64-apple-ios
+          ac_add_options --enable-ios-target=14.0
+          ac_add_options --enable-optimize
+          ac_add_options --disable-debug
+          ac_add_options --disable-tests
+          ac_add_options --enable-linker=lld
+          MOZEOF
+
+          echo "=== .mozconfig ==="
+          cat "$FIREFOX_DIR/.mozconfig"
+
+          cd "$FIREFOX_DIR"
+          ./mach build
 
       - name: Build Reynard app
         run: |
