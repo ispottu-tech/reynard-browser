@@ -41,12 +41,15 @@ jobs:
       - name: Install LLVM linker (lld)
         run: |
           brew install llvm
-          sudo ln -sf /opt/homebrew/opt/llvm/bin/ld64.lld /usr/local/bin/ld64.lld
-          sudo ln -sf /opt/homebrew/opt/llvm/bin/ld.lld /usr/local/bin/ld.lld
-          sudo ln -sf /opt/homebrew/opt/llvm/bin/lld /usr/local/bin/lld
-          sudo ln -sf /opt/homebrew/opt/llvm/bin/wasm-ld /usr/local/bin/wasm-ld
-          echo "lld installed and symlinked"
-          which ld64.lld && ld64.lld --version || true
+          CLANG_DIR=$(dirname $(xcrun -f clang))
+          echo "Clang directory: $CLANG_DIR"
+          sudo ln -sf /opt/homebrew/opt/llvm/bin/ld64.lld "$CLANG_DIR/ld64.lld"
+          sudo ln -sf /opt/homebrew/opt/llvm/bin/ld.lld "$CLANG_DIR/ld.lld"
+          sudo ln -sf /opt/homebrew/opt/llvm/bin/lld "$CLANG_DIR/lld"
+          sudo ln -sf /opt/homebrew/opt/llvm/bin/wasm-ld "$CLANG_DIR/wasm-ld"
+          echo "lld symlinked into Xcode toolchain at $CLANG_DIR"
+          ls -la "$CLANG_DIR/ld64.lld"
+          "$CLANG_DIR/ld64.lld" --version || true
 
       - name: Install Rust toolchain
         run: |
