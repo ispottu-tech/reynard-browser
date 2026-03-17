@@ -1,28 +1,21 @@
-name: Build and Release
+name: Build Reynard Enhanced
 
 on:
   workflow_dispatch:
     inputs:
-      create_nightly:
-        description: 'Create nightly release'
+      create_release:
+        description: 'Create a release with the IPA'
         type: boolean
-        default: false
+        default: true
 
 jobs:
   build:
-    runs-on: self-hosted
-    outputs:
-      artifact: ${{ steps.upload-artifact.outputs.artifact }}
-    steps:
-      - name: Prepare workspace
-        shell: bash
-        run: |
-          current="${GITHUB_WORKSPACE}"
-          while [ -n "${current}" ] && [ "${current}" != "/" ]; do
-            echo "::add-mask::${current}"
-            current=$(dirname "${current}")
-          done
+    runs-on: macos-15
+    timeout-minutes: 240
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.2.app/Contents/Developer
 
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -35,104 +28,87 @@ jobs:
       - name: Checkout idevice submodule
         run: git submodule update --init --depth 1 --recursive support/idevice
 
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s "$DEVELOPER_DIR"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+
+      - name: Install Rust iOS target
+        run: |
+          rustup target add aarch64-apple-ios
+          rustc --version
+          cargo --version
+
       - name: Update Gecko
         run: ./tools/development/update-gecko.sh
 
       - name: Apply Gecko patches
         run: ./tools/development/apply-patches.sh
 
+      - name: Apply Enhanced mobile.js
+        run: |
+          MOBILE_JS="engine/firefox/mobile/ios/app/defaults/pref/mobile.js"
+          if [ ! -f "$MOBILE_JS" ]; then
+            MOBILE_JS=$(find engine/firefox -path "*/defaults/pref/mobile.js" -print -quit 2>/dev/null || true)
+          fi
+          if [ -n "$MOBILE_JS" ] && [ -f "$MOBILE_JS" ]; then
+            cat enhancements/mobile-enhanced.js >> "$MOBILE_JS"
+            echo "Enhanced prefs appended to $MOBILE_JS"
+          else
+            echo "WARNING: mobile.js not found, skipping pref enhancements"
+          fi
+
       - name: Build idevice
         run: ./tools/development/build-idevice.sh
 
       - name: Build the app
-        run: ./tools/release/build-app.sh
+        run: |
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          ./tools/release/build-app.sh
 
       - name: Create .ipa file
         run: ./tools/release/create-ipa.sh
 
-      - name: Tar build artifact
-        run: tar -czf ./dist/Reynard.xcarchive.tar.gz -C ./dist Reynard.xcarchive
-
-      - name: Upload build artifact
-        id: upload-artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Reynard.xcarchive
-          path: ./dist/Reynard.xcarchive.tar.gz
-
-      - name: Upload .ipa artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Reynard.ipa
+          name: Reynard-Enhanced.ipa
           path: ./dist/Reynard.ipa
-
-      - name: Clean up workspace
-        if: always()
-        shell: bash
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ]; then
-            find "${GITHUB_WORKSPACE}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-          fi
 
   release:
     runs-on: ubuntu-latest
     needs: build
-    if: github.event.inputs.create_nightly && github.event.inputs.create_nightly == 'true'
+    if: github.event.inputs.create_release == 'true'
     permissions:
       contents: write
     steps:
-      - name: Prepare workspace
-        shell: bash
-        run: |
-          current="${GITHUB_WORKSPACE}"
-          while [ -n "${current}" ] && [ "${current}" != "/" ]; do
-            echo "::add-mask::${current}"
-            current=$(dirname "${current}")
-          done
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          clean: true
 
-      - name: Download .ipa artifact
+      - name: Download IPA
         uses: actions/download-artifact@v4
         with:
-          name: Reynard.ipa
+          name: Reynard-Enhanced.ipa
           path: ./dist
 
-      - name: Get information for release
-        id: version
-        run: |
-          CURRENT_VERSION=$(grep 'CURRENT_VERSION' ./browser/Configuration/Reynard.xcconfig | cut -d '=' -f2 | tr -d ' ')
-          CURRENT_BUILD=$(date +%Y%b%d | tr '[:lower:]' '[:upper:]')
-          ENGINE_REVISION=$(cat ./engine/release.txt)
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "current_build=$CURRENT_BUILD" >> $GITHUB_OUTPUT
-          echo "engine_revision=$ENGINE_REVISION" >> $GITHUB_OUTPUT
-
-      - name: Create nightly release
-        uses: andelf/nightly-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
+          tag_name: enhanced-${{ github.run_number }}
+          name: "Reynard Enhanced Build #${{ github.run_number }}"
           body: |
-            **Build:** ${{ steps.version.outputs.current_build }}
-            **Version:** ${{ steps.version.outputs.current_version }}
-            **Engine:** [${{ steps.version.outputs.engine_revision }}](https://github.com/mozilla-firefox/firefox/commit/${{ steps.version.outputs.engine_revision }})
-            **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-
-            This is a nightly release [created automatically with GitHub Actions workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}).
-
-            Before using this release, please read the installation instruction in the README at [#Installation](https://github.com/minh-ton/reynard-browser#installation).
-          files: |
-            ./dist/Reynard.ipa
-
-      - name: Clean up workspace
-        if: always()
-        shell: bash
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ]; then
-            find "${GITHUB_WORKSPACE}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-          fi
+            Reynard Browser Enhanced Edition
+            - GC tuning & memory optimizations
+            - Network improvements
+            - Font rendering fixes
+            - Scroll glitch reduction
+            - Privacy hardening
+            - Icon rendering stability
+          files: ./dist/Reynard.ipa
+          draft: false
+          prerelease: false
