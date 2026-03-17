@@ -41,9 +41,12 @@ jobs:
       - name: Install LLVM linker (lld)
         run: |
           brew install llvm
-          echo "/opt/homebrew/opt/llvm/bin" >> $GITHUB_PATH
-          ls /opt/homebrew/opt/llvm/bin/ld.lld || ls /opt/homebrew/opt/llvm/bin/lld || echo "lld paths:"
-          find /opt/homebrew/opt/llvm/bin -name "*lld*" 2>/dev/null || true
+          sudo ln -sf /opt/homebrew/opt/llvm/bin/ld64.lld /usr/local/bin/ld64.lld
+          sudo ln -sf /opt/homebrew/opt/llvm/bin/ld.lld /usr/local/bin/ld.lld
+          sudo ln -sf /opt/homebrew/opt/llvm/bin/lld /usr/local/bin/lld
+          sudo ln -sf /opt/homebrew/opt/llvm/bin/wasm-ld /usr/local/bin/wasm-ld
+          echo "lld installed and symlinked"
+          which ld64.lld && ld64.lld --version || true
 
       - name: Install Rust toolchain
         run: |
@@ -60,6 +63,13 @@ jobs:
 
       - name: Apply Gecko patches
         run: ./tools/development/apply-patches.sh
+
+      - name: Add linker config to build script
+        run: |
+          sed -i '' '/--disable-tests/a\
+          echo "ac_add_options --enable-linker=lld"' tools/development/build-gecko.sh
+          echo "Added --enable-linker=lld to build-gecko.sh"
+          grep "linker" tools/development/build-gecko.sh
 
       - name: Bypass SDK version check if needed
         run: |
