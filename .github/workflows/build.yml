@@ -103,12 +103,29 @@ jobs:
           cat enhancements/prompt-handler-append.swift >> "$CONTENT_DELEGATE"
           echo "Prompt handler appended to ContentDelegate.swift"
 
-          sed -i '' '/lazy var progressHandler = newProgressHandler(self)/a\
-          \ \ \ \ lazy var promptHandler = newPromptHandler(self)' "$GECKO_SESSION"
+          python3 << 'PYEOF'
+import re
+path = "browser/GeckoView/GeckoSession.swift"
+with open(path, "r") as f:
+    content = f.read()
 
-          sed -i '' 's/        progressHandler,/        progressHandler,\'$'\n''                promptHandler,/' "$GECKO_SESSION"
+content = re.sub(
+    r'(lazy var progressHandler = newProgressHandler\(self\))\s+',
+    r'\1\n    lazy var promptHandler = newPromptHandler(self)\n    ',
+    content
+)
 
+content = content.replace(
+    "        progressHandler,",
+    "        progressHandler,\n                promptHandler,"
+)
+
+with open(path, "w") as f:
+    f.write(content)
+PYEOF
           echo "promptHandler registered in GeckoSession.swift"
+          echo "=== Lines around promptHandler ==="
+          grep -n -B2 -A2 "promptHandler" "$GECKO_SESSION"
 
       - name: Build idevice support library
         run: ./tools/development/build-idevice.sh
