@@ -104,10 +104,9 @@ jobs:
           echo "Prompt handler appended to ContentDelegate.swift"
 
           sed -i '' '/lazy var progressHandler = newProgressHandler(self)/a\
-          lazy var promptHandler = newPromptHandler(self)' "$GECKO_SESSION"
+          \ \ \ \ lazy var promptHandler = newPromptHandler(self)' "$GECKO_SESSION"
 
-          sed -i '' 's/        progressHandler,/        progressHandler,\
-                  promptHandler,/' "$GECKO_SESSION"
+          sed -i '' 's/        progressHandler,/        progressHandler,\'$'\n''                promptHandler,/' "$GECKO_SESSION"
 
           echo "promptHandler registered in GeckoSession.swift"
 
@@ -128,13 +127,12 @@ jobs:
       - name: Build Reynard app
         run: |
           XCPROJ="browser/Reynard.xcodeproj"
+          SCHEME="Reynard"
           echo "Using project: $XCPROJ"
+          echo "Using scheme: $SCHEME"
 
           echo "=== Available schemes ==="
           xcodebuild -project "$XCPROJ" -list
-
-          SCHEME=$(xcodebuild -project "$XCPROJ" -list 2>/dev/null | grep -A 20 "Schemes:" | tail -n +2 | head -1 | xargs)
-          echo "Using scheme: $SCHEME"
 
           xcodebuild build \
             -project "$XCPROJ" \
