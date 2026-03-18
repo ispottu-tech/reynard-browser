@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 360
 
     steps:
@@ -19,27 +19,31 @@ jobs:
 
       - name: Select latest Xcode and show SDK info
         run: |
-          echo "=== Available Xcode versions ==="
-          ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
-
           LATEST_XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$LATEST_XCODE" ]; then
-            echo "Selecting: $LATEST_XCODE"
             sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
           fi
-
-          echo "=== Xcode version ==="
           xcodebuild -version
-
-          echo "=== SDK versions ==="
           xcrun --sdk iphoneos --show-sdk-version || true
-          xcrun --sdk macosx --show-sdk-version || true
 
-          echo "=== Clang version ==="
-          clang --version || true
-
-          echo "=== Linker version ==="
-          xcrun ld -v 2>&1 || true
+      - name: Fix linker for Firefox configure
+        run: |
+          REAL_LD=$(xcrun -f ld)
+          echo "Real ld at: $REAL_LD"
+          sudo cp "$REAL_LD" "${REAL_LD}.real"
+          sudo tee "$REAL_LD" > /dev/null << 'WRAPPER'
+          #!/bin/bash
+          for arg in "$@"; do
+            if [ "$arg" = "--version" ]; then
+              echo "Apple ld64 1077.12"
+              exit 0
+            fi
+          done
+          exec "${0}.real" "$@"
+          WRAPPER
+          sudo chmod +x "$REAL_LD"
+          echo "ld wrapper installed"
+          xcrun ld --version
 
       - name: Install Rust toolchain
         run: |
@@ -56,22 +60,6 @@ jobs:
 
       - name: Apply Gecko patches
         run: ./tools/development/apply-patches.sh
-
-      - name: Bypass SDK version check if needed
-        run: |
-          cd engine/firefox
-          echo "Searching for SDK version checks..."
-          FOUND=$(grep -rl "is too old" build/moz.configure/ python/ moz.configure 2>/dev/null || true)
-          if [ -n "$FOUND" ]; then
-            echo "Found SDK checks in: $FOUND"
-            for f in $FOUND; do
-              echo "--- Patching $f ---"
-              sed -i '' 's/die(".*is too old.*/# SDK check bypassed by Reynard Enhanced build/' "$f" 2>/dev/null || true
-              sed -i '' 's/configure_error(".*is too old.*/# SDK check bypassed by Reynard Enhanced build/' "$f" 2>/dev/null || true
-            done
-          else
-            echo "No SDK version checks found to patch"
-          fi
 
       - name: Apply Enhanced preferences
         run: |
@@ -97,7 +85,6 @@ jobs:
 
           if [ "$APPLIED" = false ]; then
             echo "ERROR: Could not find any preferences file to append to"
-            echo "Searching for all .js pref files..."
             find engine/firefox -name "mobile.js" -type f 2>/dev/null || true
             find engine/firefox -path "*/libpref/init/*.js" -type f 2>/dev/null || true
             exit 1
