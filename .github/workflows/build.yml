@@ -125,18 +125,49 @@ jobs:
           cd engine/firefox
           ./mach build
 
-      - name: Build Reynard app
+      - name: Find and build Reynard app
         run: |
-          xcodebuild build \
-            -project browser/ArtI.xcodeproj \
-            -scheme ArtI \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build/derived \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=NO
+          echo "=== Looking for Xcode projects ==="
+          find . -name "*.xcodeproj" -type d 2>/dev/null
+          find . -name "*.xcworkspace" -type d 2>/dev/null
+
+          XCPROJ=$(find . -name "*.xcodeproj" -type d | head -1)
+          XCWORK=$(find . -name "*.xcworkspace" -not -path "*/xcodeproj/*" -type d | head -1)
+
+          if [ -n "$XCWORK" ]; then
+            echo "Using workspace: $XCWORK"
+            SCHEME=$(xcodebuild -workspace "$XCWORK" -list 2>/dev/null | grep -A 20 "Schemes:" | tail -n +2 | head -1 | xargs)
+            echo "Using scheme: $SCHEME"
+            xcodebuild build \
+              -workspace "$XCWORK" \
+              -scheme "$SCHEME" \
+              -configuration Release \
+              -destination 'generic/platform=iOS' \
+              -derivedDataPath build/derived \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              ONLY_ACTIVE_ARCH=NO
+          elif [ -n "$XCPROJ" ]; then
+            echo "Using project: $XCPROJ"
+            SCHEME=$(xcodebuild -project "$XCPROJ" -list 2>/dev/null | grep -A 20 "Schemes:" | tail -n +2 | head -1 | xargs)
+            echo "Using scheme: $SCHEME"
+            xcodebuild build \
+              -project "$XCPROJ" \
+              -scheme "$SCHEME" \
+              -configuration Release \
+              -destination 'generic/platform=iOS' \
+              -derivedDataPath build/derived \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              ONLY_ACTIVE_ARCH=NO
+          else
+            echo "ERROR: No Xcode project found"
+            find . -name "*.pbxproj" 2>/dev/null
+            ls -la browser/ 2>/dev/null
+            exit 1
+          fi
 
       - name: Create IPA
         run: |
