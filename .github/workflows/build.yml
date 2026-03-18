@@ -115,7 +115,15 @@ jobs:
         run: ./tools/development/build-idevice.sh
 
       - name: Build Gecko engine
-        run: ./tools/development/build-gecko.sh
+        run: |
+          ./tools/development/build-gecko.sh || true
+
+          echo 'ac_add_options --without-wasm-sandboxed-libraries' >> engine/firefox/.mozconfig
+          echo "=== Final .mozconfig ==="
+          cat engine/firefox/.mozconfig
+
+          cd engine/firefox
+          ./mach build
 
       - name: Build Reynard app
         run: |
